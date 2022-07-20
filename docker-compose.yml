@@ -1,19 +1,27 @@
 version: "3.4"
 services:
+
+
   vpn:
-    container_name: vpn
-    image: dperson/openvpn-client:latest
-    cap_add:
-      - net_admin # required to modify network interfaces
-    restart: unless-stopped
-    volumes:
-      - /dev/net:/dev/net:z # tun device
-      - ${ROOT}/config/vpn:/vpn # OpenVPN configuration
-    security_opt:
-      - label:disable
+    cap_add: 
+      - NET_ADMIN
+    volumes: 
+      - '${ROOT}/transmission:/data'
+    environment:
+      - OPENVPN_PROVIDER=NORDVPN
+      - OPENVPN_USERNAME=${OPENVPN_USERNAME}
+      - NORDVPN_COUNTRY=IT 
+      - NORDVPN_CATEGORY=legacy_p2p 
+      - LOCAL_NETWORK=192.168.0.0/16
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
     ports:
-      - 8112:8112 # port for deluge web UI to be reachable from local network
-    command: '-f "" -r 192.168.1.0/24' # enable firewall and route local network traffic
+      - '9091:9091'
+      - '8112:8112'
+    image: haugene/transmission-openvpn
 
   deluge:
     container_name: deluge
@@ -42,18 +50,6 @@ services:
       - ${ROOT}/downloads/torrent-blackhole:/downloads # place where to put .torrent files for manual download
       - ${ROOT}/config/jackett:/config # config files
 
-  nzbget:
-    container_name: nzbget
-    image: linuxserver/nzbget:latest
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - PUID=${PUID} # default user id, defined in .env
-      - PGID=${PGID} # default group id, defined in .env
-      - TZ=${TZ} # timezone, defined in .env
-    volumes:
-      - ${ROOT}/downloads:/downloads # download folder
-      - ${ROOT}/config/nzbget:/config # config files
 
   sonarr:
     container_name: sonarr
@@ -67,7 +63,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${ROOT}/config/sonarr:/config # config files
-      - ${ROOT}/complete/tv:/tv # tv shows folder
+      - ${EXTERNAL_HDD}/tv:/tv # tv shows folder
       - ${ROOT}/downloads:/downloads # download folder
 
   radarr:
@@ -82,20 +78,20 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${ROOT}/config/radarr:/config # config files
-      - ${ROOT}/complete/movies:/movies # movies folder
+      - ${EXTERNAL_HDD}/movies:/movies # movies folder
       - ${ROOT}/downloads:/downloads # download folder
 
-  plex-server:
-    container_name: plex-server
-    image: plexinc/pms-docker:latest
-    restart: unless-stopped
-    environment:
-      - TZ=${TZ} # timezone, defined in .env
-    network_mode: host
-    volumes:
-      - ${ROOT}/config/plex/db:/config # plex database
-      - ${ROOT}/config/plex/transcode:/transcode # temp transcoded files
-      - ${ROOT}/complete:/data # media library
+#  plex-server:
+#    container_name: plex-server
+#    image: plexinc/pms-docker:latest
+#    restart: unless-stopped
+#    environment:
+#      - TZ=${TZ} # timezone, defined in .env
+#    network_mode: host
+#    volumes:
+#      - ${ROOT}/config/plex/db:/config # plex database
+#      - ${ROOT}/config/plex/transcode:/transcode # temp transcoded files
+#      - ${EXTERNAL_HDD}:/data # media library
 
   bazarr:
     container_name: bazarr
@@ -109,5 +105,59 @@ services:
       - UMASK_SET=022 #optional
     volumes:
       - ${ROOT}/config/bazarr:/config # config files
-      - ${ROOT}/complete/movies:/movies # movies folder
-      - ${ROOT}/complete/tv:/tv # tv shows folder
+      - ${EXTERNAL_HDD}/movies:/movies # movies folder
+      - ${EXTERNAL_HDD}/tv:/tv # tv shows folder
+  organizr:
+    image: linuxserver/organizr
+    container_name: organizr
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - TZ=${TZ} # timezone, defined in .env
+    volumes:
+      - ${ROOT}/config/bazarr:/config # config files
+    ports:
+      - 9983:80
+      - 81:8989
+  tautulli:
+    image: ghcr.io/tautulli/tautulli
+    container_name: tautulli
+    restart: unless-stopped
+    volumes:
+      - ${ROOT}/config/tautulli:/config
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    ports:
+      - 8181:8181
+      
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${ROOT}/config/readarr:/config
+      - ${EXTERNAL_HDD}/books:/books # tv shows folder
+      - ${ROOT}/downloads:/downloads # download folder
+    ports:
+      - 8787:8787
+    restart: unless-stopped
+    
+    
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - DOCKER_MODS=linuxserver/calibre-web:calibre|linuxserver/mods:lazylibrarian-ffmpeg #optional
+    volumes:
+      - ${ROOT}/config/lazylibrarian:/config
+      - ${ROOT}/downloads:/downloads # download folder
+      - ${EXTERNAL_HDD}/books:/books # tv shows folder
